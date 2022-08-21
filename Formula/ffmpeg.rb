@@ -1,11 +1,11 @@
 class Ffmpeg < Formula
   desc "Play, record, convert, and stream audio and video"
   homepage "https://ffmpeg.org/"
-  url "https://ffmpeg.org/releases/ffmpeg-5.0.tar.xz"
-  version "5.0-with-options" # to distinguish from homebrew-core's ffmpeg
-  sha256 "51e919f7d205062c0fd4fae6243a84850391115104ccf1efc451733bc0ac7298"
+  url "https://ffmpeg.org/releases/ffmpeg-5.1.tar.xz"
+  version "5.1-with-options" # to distinguish from homebrew-core's ffmpeg
+  sha256 "55eb6aab5ee235550fa54a33eaf8bf1b4ec66c01453182b12f6a993d75698b03"
   license "GPL-2.0-or-later"
-  revision 1
+  revision 2
   head "https://github.com/FFmpeg/FFmpeg.git"
 
   option "with-libaom", "Enable AV1 video streams"
@@ -36,6 +36,7 @@ class Ffmpeg < Formula
   option "with-openjpeg", "Enable JPEG 2000 image format"
   option "with-openssl", "Enable SSL support"
   option "with-rav1e", "Enable AV1 encoding via librav1e"
+  option "with-svt-av1", "Enable AV1 encoding via libsvtav1"
   option "with-rtmpdump", "Enable RTMP dumping support"
   option "with-rubberband", "Enable rubberband library"
   option "with-webp", "Enable using libwebp to encode WEBP images"
@@ -44,10 +45,10 @@ class Ffmpeg < Formula
   option "with-srt", "Enable SRT library"
   option "with-libvmaf", "Enable libvmaf scoring library"
   option "with-libxml2", "Enable libxml2 library"
+  option "with-libzvbi", "Enable decoding of DVB teletext pages and DVB teletext subtitles"
 
   depends_on "nasm" => :build
   depends_on "pkg-config" => :build
-  depends_on "texinfo" => :build
 
   depends_on "lame"
   depends_on "libvpx"
@@ -92,6 +93,7 @@ class Ffmpeg < Formula
   depends_on "rubberband" => :optional
   depends_on "speex" => :optional
   depends_on "srt" => :optional
+  depends_on "svt-av1" => :optional
   depends_on "tesseract" => :optional
   depends_on "two-lame" => :optional
   depends_on "webp" => :optional
@@ -103,7 +105,9 @@ class Ffmpeg < Formula
   uses_from_macos "zlib"
 
   on_linux do
+    depends_on "alsa-lib"
     depends_on "libxv"
+    depends_on "gcc" => :optional
   end
 
   def install
@@ -124,6 +128,7 @@ class Ffmpeg < Formula
 
     if OS.mac?
       args << "--enable-opencl"
+      args << "--enable-audiotoolbox"
       args << "--enable-videotoolbox"
       args << "--enable-neon" if Hardware::CPU.arm?
     end
@@ -153,6 +158,7 @@ class Ffmpeg < Formula
     args << "--enable-libopenjpeg" if build.with? "openjpeg"
     args << "--enable-libopenmpt" if build.with? "libopenmpt"
     args << "--enable-librav1e" if build.with? "rav1e"
+    args << "--enable-libsvtav1" if build.with? "svt-av1"
     args << "--enable-librist" if build.with? "librist"
     args << "--enable-librsvg" if build.with? "librsvg"
     args << "--enable-librtmp" if build.with? "rtmpdump"
@@ -169,6 +175,7 @@ class Ffmpeg < Formula
     args << "--enable-libxml2" if build.with? "libxml2"
     args << "--enable-libxvid" if build.with? "xvid"
     args << "--enable-libzimg" if build.with? "zimg"
+    args << "--enable-libzvbi" if build.with? "libzvbi"
     args << "--enable-libzmq" if build.with? "zeromq"
     args << "--enable-openssl" if build.with? "openssl"
 
@@ -180,6 +187,7 @@ class Ffmpeg < Formula
       args << "--enable-decklink"
       args << "--extra-cflags=-I#{HOMEBREW_PREFIX}/include"
       args << "--extra-ldflags=-L#{HOMEBREW_PREFIX}/include"
+      mv "VERSION", "VERSION.txt"
     end
 
     if build.with? "jack"
@@ -188,20 +196,16 @@ class Ffmpeg < Formula
       args << "--enable-indev=jack"
     end
 
+    if build.with? "libzvbi"
+      ENV.prepend_path "PKG_CONFIG_PATH", Formula["zvbi"].opt_lib/"pkgconfig"
+      args << "--enable-libzvbi"
+    end
+
     args << "--enable-version3" if build.with?("opencore-amr") || build.with?("libvmaf")
 
     if build.with? "opencore-amr"
       args << "--enable-libopencore-amrnb"
       args << "--enable-libopencore-amrwb"
-    end
-
-    if build.with? "libvmaf"
-      # Replace hardcoded default VMAF model path
-      %w[doc/filters.texi libavfilter/vf_libvmaf.c].each do |f|
-        inreplace f, "/usr/local/share/model", HOMEBREW_PREFIX/"share/libvmaf/model"
-        # Since libvmaf v2.0.0, `.pkl` model files have been deprecated in favor of `.json` model files.
-        inreplace f, "vmaf_v0.6.1.pkl", "vmaf_v0.6.1.json"
-      end
     end
 
     system "./configure", *args
